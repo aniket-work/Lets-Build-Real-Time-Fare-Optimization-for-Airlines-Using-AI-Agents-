@@ -1,0 +1,5 @@
+api_key: ${GROQ_API_KEY}
+models:
+  agent: llama-3.2-3b-preview
+  ollama: llama3.2
+temperature: 0.7
