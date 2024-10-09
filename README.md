@@ -32,7 +32,7 @@ By exploring this process, you’ll gain insights into how businesses can levera
 ![Design Diagram](design_docs/design.png)
 
 
-# Tutorial: How Multi-AI Agents Collaborate to Build Winning Product Development Strategies 
+# Tutorial: Let's Build Real Time Fare Optimization for Airlines Using AI Agents  
 
 ## Prerequisites
 - Python installed on your system.
@@ -61,7 +61,7 @@ By exploring this process, you’ll gain insights into how businesses can levera
 
 **Install Project Dependencies:**
 
-Follow these steps to set up and run the 'How Multi-AI Agents Collaborate to Build Winning Product Development Strategies' project:
+Follow these steps to set up and run the 'Let's Build Real Time Fare Optimization for Airlines Using AI Agents ' project:
 
 1. Navigate to your project directory:
    ```
@@ -76,15 +76,15 @@ Follow these steps to set up and run the 'How Multi-AI Agents Collaborate to Bui
    This command installs all the necessary Python packages listed in the requirements.txt file.
 
 
-## Run - Hands-On Guide: How Multi-AI Agents Collaborate to Build Winning Product Development Strategies
+## Run - Hands-On Guide: Let's Build Real Time Fare Optimization for Airlines Using AI Agents 
 
    ```bash 
      
       # Run 
-      streamlit run app.py
+      streamlit run main.py
       
    ```
 
 ## Conclusion and Next Steps
 
-Congratulations! You've just built How Multi-AI Agents Collaborate to Build Winning Product Development Strategies.
+Congratulations! You've just built Let's Build Real Time Fare Optimization for Airlines Using AI Agents.
