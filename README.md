@@ -81,7 +81,7 @@ Follow these steps to set up and run the 'How Multi-AI Agents Collaborate to Bui
    ```bash 
      
       # Run 
-      streamlit run app/main.py
+      streamlit run app.py
       
    ```
 

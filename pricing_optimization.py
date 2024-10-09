@@ -1,6 +1,6 @@
-import os
-import time
-from dotenv import load_dotenv
+import yaml
+import logging
+from typing import Sequence, List
 from langchain_groq import ChatGroq
 from langchain.llms import Ollama
 from langchain.agents import AgentExecutor, create_react_agent
@@ -8,38 +8,30 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
 from langchain_experimental.tools import PythonREPLTool
 from langchain.schema import AgentAction
-from typing import List, Sequence
 from langgraph.graph import END, MessageGraph
-import re
-import yaml
-import logging
-import random
 import backoff
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
+
+from constants import GROQ_API_KEY, INSTRUCTIONS, REFLECTION_SYSTEM_MESSAGE
+from utils import extract_python_code, extract_final_output
+
+# Load configuration
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Load environment variables and configuration
-load_dotenv()
-with open('config.yaml', 'r') as f:
-    config = yaml.safe_load(f)
 
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=5)
 def create_llm(api_choice='groq'):
     if api_choice == 'groq':
-        api_key = os.getenv('GROQ_API_KEY')
         return ChatGroq(temperature=config['temperature'],
                         model=config['models']['agent'],
-                        api_key=api_key)
+                        api_key=GROQ_API_KEY)
     elif api_choice == 'ollama':
         return Ollama(model=config['models']['ollama'])
     else:
         raise ValueError(f"Invalid API choice: {api_choice}")
-
 
 tools = [PythonREPLTool()]
 
@@ -69,21 +61,10 @@ messages: {messages}
 {agent_scratchpad}
 """)
 
-instructions = """You are an AI agent designed to generate and optimize pricing strategies for an airline.
-Your task is to analyze market data, competitor pricing, and demand forecasts to generate pricing recommendations.
-Then, reflect on these recommendations considering factors like profit margins, customer retention, and long-term market positioning.
-Use Python to perform calculations and data analysis. If you need to generate random data for simulation, you can do so.
-Iterate on the pricing strategy until you find an optimal balance.
-"""
-
 reflection_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert in airline pricing strategy and market analysis. "
-               "Evaluate the provided pricing recommendation and consider its impact on profit margins, customer retention, and long-term market positioning. "
-               "If the strategy needs improvement, explain why and suggest areas for refinement. "
-               "If the strategy seems optimal, confirm its suitability."),
+    ("system", REFLECTION_SYSTEM_MESSAGE),
     MessagesPlaceholder(variable_name="messages"),
 ])
-
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def generation_node(state: Sequence[BaseMessage]):
@@ -110,7 +91,6 @@ def generation_node(state: Sequence[BaseMessage]):
     except Exception as e:
         logger.error(f"Error in generation node: {str(e)}")
         raise
-
 
 @backoff.on_exception(backoff.expo, Exception, max_tries=3)
 def reflection_node(messages: Sequence[BaseMessage]) -> List[BaseMessage]:
@@ -141,31 +121,16 @@ def reflection_node(messages: Sequence[BaseMessage]) -> List[BaseMessage]:
         logger.error(f"Error in reflection node: {str(e)}")
         raise
 
-
 def should_continue(state):
     if not state:
         return "end"
     last_message = state[-1]
-    if isinstance(last_message,
-                  BaseMessage) and "optimal" in last_message.content.lower() and "strategy" in last_message.content.lower():
+    if isinstance(last_message, BaseMessage) and "optimal" in last_message.content.lower() and "strategy" in last_message.content.lower():
         return "end"
-    if len(state) > 10:
+    if len(state) > config['max_iterations']:
         logger.warning("Maximum iterations reached, ending execution.")
         return "end"
     return "generate"
-
-
-def extract_python_code(text):
-    pattern = re.compile(r'```python\n(.*?)\n```', re.DOTALL)
-    match = pattern.search(text)
-    return match.group(1).strip() if match else "No Python code found."
-
-
-def extract_final_output(text):
-    pattern = re.compile(r'Pricing recommendation: (.*)')
-    match = pattern.search(text)
-    return match.group(1).strip() if match else "No pricing recommendation found."
-
 
 def run_pricing_optimization(market_data, api_choice='groq'):
     try:
@@ -174,7 +139,7 @@ def run_pricing_optimization(market_data, api_choice='groq'):
         logger.error(f"Failed to initialize LLM with {api_choice} API: {str(e)}")
         return None, None, None
 
-    prompt_agent = base_prompt.partial(instructions=instructions)
+    prompt_agent = base_prompt.partial(instructions=INSTRUCTIONS)
     agent = create_react_agent(llm, tools, prompt_agent)
     global generate, reflect
     generate = AgentExecutor(agent=agent, tools=tools, verbose=True, return_intermediate_steps=True,
@@ -200,7 +165,6 @@ def run_pricing_optimization(market_data, api_choice='groq'):
                 results.append(event['reflect'][0] if isinstance(event['reflect'], list) else event['reflect'])
             if event.get('__end__'):
                 break
-            time.sleep(1)
 
         if results:
             final_output = next((r.content for r in reversed(results) if isinstance(r, AIMessage)),
@@ -214,68 +178,3 @@ def run_pricing_optimization(market_data, api_choice='groq'):
     except Exception as e:
         logger.error(f"Error during pricing optimization: {str(e)}")
         return None, None, None
-
-
-def main():
-    st.set_page_config(page_title="Airline Pricing Optimization with Reflection Agent", layout="wide")
-    st.title("Airline Pricing Optimization with Reflection Agent")
-
-    st.sidebar.header("Market Data Input")
-    average_price = st.sidebar.number_input("Average Price", value=100, step=1)
-    competitor_prices = st.sidebar.text_input("Competitor Prices (comma-separated)", value="95,98,102,105")
-    demand_forecast = st.sidebar.number_input("Demand Forecast", value=1000, step=10)
-    current_inventory = st.sidebar.number_input("Current Inventory", value=1200, step=10)
-
-    api_choice = st.sidebar.selectbox("Choose API", options=["groq", "ollama"], index=0)
-
-    if st.sidebar.button("Run Pricing Optimization"):
-        market_data = {
-            "average_price": average_price,
-            "competitor_prices": [float(price.strip()) for price in competitor_prices.split(",")],
-            "demand_forecast": demand_forecast,
-            "current_inventory": current_inventory,
-        }
-
-        with st.spinner("Running pricing optimization..."):
-            results, python_code, pricing_recommendation = run_pricing_optimization(market_data, api_choice)
-
-        if results:
-            st.success("Pricing optimization completed!")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.subheader("Optimization Process")
-                for i, result in enumerate(results):
-                    if isinstance(result, AIMessage):
-                        st.info(f"Generation Step {i + 1}:\n{result.content}")
-                    elif isinstance(result, HumanMessage):
-                        st.warning(f"Reflection Step {i + 1}:\n{result.content}")
-
-            with col2:
-                st.subheader("Final Results")
-                st.code(python_code, language="python")
-                st.markdown(f"**Final Pricing Recommendation:**\n{pricing_recommendation}")
-
-                # Visualize the pricing recommendation
-                try:
-                    recommended_price = float(re.search(r'\d+\.?\d*', pricing_recommendation).group())
-                    prices = market_data['competitor_prices'] + [recommended_price]
-                    labels = ['Competitor ' + str(i + 1) for i in range(len(market_data['competitor_prices']))] + [
-                        'Recommended']
-
-                    fig, ax = plt.subplots()
-                    ax.bar(labels, prices)
-                    ax.set_ylabel('Price')
-                    ax.set_title('Pricing Comparison')
-                    plt.xticks(rotation=45)
-                    st.pyplot(fig)
-                except:
-                    st.error("Could not visualize the pricing recommendation.")
-
-        else:
-            st.error("Pricing optimization failed. Please check the logs for more information.")
-
-
-if __name__ == "__main__":
-    main()

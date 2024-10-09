@@ -1,5 +1,7 @@
 api_key: ${GROQ_API_KEY}
-models:
-  agent: llama-3.2-3b-preview
-  ollama: llama3.2
 temperature: 0.7
+models:
+  agent: "mixtral-8x7b-32768"
+  ollama: "llama3.2"
+max_iterations: 10
+logging_level: "INFO"
